@@ -1,0 +1,8 @@
+# Normalise line endings so the files behave identically on Windows and on the
+# GitHub Pages server (which serves them byte for byte).
+* text=auto eol=lf
+
+# Reference genome and marker tables are data, keep them out of any diff churn.
+*.fna  text eol=lf
+*.json text eol=lf
+*.tsv  text eol=lf

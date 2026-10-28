@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Corynebacterium macginleyi Group 1 Typer</title>
+<meta name="description" content="Assigns assembled Corynebacterium macginleyi genomes to phylogenetic Group 1 using 85 group-specific SNP loci. Runs entirely in the browser.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <h1>C. macginleyi <span>Group 1</span> Typer</h1>
+      <p class="sub">Assigns an assembled genome to the ocular high-risk lineage using 85 Group 1&ndash;specific SNP loci</p>
+    </div>
+    <div class="refs" id="refs"></div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ============================ input ============================ -->
+  <section class="card" id="inputCard">
+    <div class="card-head">
+      <h2>1 &middot; Load genomes</h2>
+      <span class="hint">Everything is computed locally in your browser &mdash; no sequence is uploaded anywhere</span>
+    </div>
+
+    <div id="drop" class="drop">
+      <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 16v-8m0 0-3 3m3-3 3 3M6 20h12a2 2 0 0 0 2-2V9l-5-5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>
+      <p><b>Drop assembled genome FASTA files here</b>, or click to select</p>
+      <p class="small">Accepts .fa / .fna / .fasta / .gz &mdash; select several at once, or add repeatedly</p>
+      <input type="file" id="file" multiple accept=".fa,.fas,.fasta,.fna,.ffn,.fa.gz,.fasta.gz,.fna.gz,.txt" hidden>
+    </div>
+
+    <div class="filelist" id="filelist" hidden></div>
+
+    <details class="paste">
+      <summary>Or paste sequence text</summary>
+      <textarea id="paste" rows="5" spellcheck="false" placeholder=">contig_1&#10;ATGC..."></textarea>
+      <button class="btn ghost small" id="addPaste">Add to list</button>
+    </details>
+
+    <div class="panel-row">
+      <label>Minimum locus coverage
+        <input type="number" id="minCov" value="70" min="0" max="100" step="5"><span class="unit">%</span>
+      </label>
+      <label>Group 1 call threshold
+        <input type="number" id="hi" value="90" min="50" max="100" step="1"><span class="unit">%</span>
+      </label>
+      <label>Non-Group 1 call threshold
+        <input type="number" id="lo" value="10" min="0" max="50" step="1"><span class="unit">%</span>
+      </label>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" id="run" disabled>Run typing</button>
+      <button class="btn ghost" id="clear">Clear</button>
+      <div class="progress" id="progress" hidden>
+        <div class="bar"><i id="bar"></i></div><span id="progtxt">0 / 85</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ results ============================ -->
+  <section class="card" id="resultCard" hidden>
+    <div id="summaryWrap" hidden>
+      <div class="card-head">
+        <h2>Results</h2>
+        <span class="hint">Click any row to open that sample&rsquo;s per-locus detail</span>
+      </div>
+      <div class="tablewrap sum">
+        <table id="tblSummary">
+          <thead><tr>
+            <th>Sample</th><th>Result</th><th>Match score</th><th>Loci typed</th>
+            <th>Assembly size</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="actions" style="margin:12px 0 18px">
+        <button class="btn ghost small" id="csvSummary">Export summary CSV</button>
+      </div>
+    </div>
+
+    <div class="verdict" id="verdict">
+      <div class="vicon" id="vicon"></div>
+      <div class="vtext">
+        <div class="vlabel">Typing result</div>
+        <div class="vmain" id="vmain">&mdash;</div>
+        <div class="vsub" id="vsub"></div>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="m-label">Group 1 match score</div>
+        <div class="m-value" id="mScore">&mdash;</div>
+        <div class="m-bar"><i id="mScoreBar"></i></div>
+      </div>
+      <div class="metric">
+        <div class="m-label">Loci typed</div>
+        <div class="m-value" id="mCov">&mdash;</div>
+        <div class="m-note" id="mCovNote"></div>
+      </div>
+      <div class="metric">
+        <div class="m-label">Input size</div>
+        <div class="m-value" id="mSize">&mdash;</div>
+        <div class="m-note" id="mSizeNote"></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><i class="sw g1"></i>Group 1 allele <b id="lg1">0</b></span>
+      <span><i class="sw non"></i>Reference allele <b id="lnon">0</b></span>
+      <span><i class="sw other"></i>Third allele <b id="lother">0</b></span>
+      <span><i class="sw na"></i>Undetermined <b id="lna">0</b></span>
+    </div>
+  </section>
+
+  <!-- ============================ detail ============================ -->
+  <section class="card" id="detailCard" hidden>
+    <div class="card-head">
+      <h2>2 &middot; Detail</h2>
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="snp">Loci (85)</button>
+        <button class="tab" data-tab="geneSum">Gene summary</button>
+        <button class="tab" data-tab="method">Method</button>
+      </nav>
+    </div>
+
+    <div class="tabpane" id="pane-snp">
+      <div class="filters">
+        <input type="search" id="q" placeholder="Filter: position / gene / product…">
+        <select id="fv">
+          <option value="">All calls</option>
+          <option value="GROUP1">Group 1 allele only</option>
+          <option value="NON">Reference allele only</option>
+          <option value="OTHER">Third allele only</option>
+          <option value="NA">Undetermined only</option>
+        </select>
+        <button class="btn ghost small" id="csv">Export loci CSV</button>
+      </div>
+      <div class="tablewrap">
+        <table id="tbl">
+          <thead><tr>
+            <th>Position</th><th>Call</th><th>Ref</th><th>Group 1</th><th>Observed</th>
+            <th>Gene</th><th>locus_tag</th><th>Product</th><th>Anchor</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="small" id="tblcount"></p>
+    </div>
+
+    <div class="tabpane" id="pane-geneSum" hidden>
+      <p class="small note">Distribution of the 85 Group 1&ndash;specific loci over genes. Read alongside the method notes.</p>
+      <div class="tablewrap">
+        <table id="tblGeneSum"><thead><tr>
+          <th>Gene / locus_tag</th><th>Product</th><th>SNPs</th><th>Span</th><th>Category</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <div class="tabpane method" id="pane-method" hidden>
+      <h3>What this page does</h3>
+      <p>The published workflow aligns each genome against the reference and reads the alleles at 85
+      Group 1&ndash;specific positions. This page reproduces that decision in the <strong>browser</strong> using an
+      anchoring strategy instead of a full alignment, which returns a result in seconds.</p>
+      <ol>
+        <li>Take the 25 bp immediately next to a SNP as an anchor;</li>
+        <li>Locate that anchor in the query assembly and in its reverse complement;</li>
+        <li>Once anchored, read the single adjacent base &mdash; that is the observed allele;</li>
+        <li>If the 25 bp anchor is absent, fall back to 20 bp and then 16 bp;</li>
+        <li>If the anchor matches several places and different bases are read, the locus is scored
+            &ldquo;undetermined&rdquo; &mdash; a missed call is preferable to a wrong one.</li>
+      </ol>
+
+      <h3>Why two versions of each flank are stored</h3>
+      <p>The 85 loci are not evenly spaced; the densest cluster holds six positions inside one 25 bp
+      window (around 2,390 kb). Taking the flank from the reference alone would make the anchor cover a
+      neighbouring mutation, and genuine Group 1 strains would fail to anchor at all. Each flank is
+      therefore also stored in a &ldquo;Group 1 haplotype&rdquo; version, and both are searched, so neither
+      allele is favoured.</p>
+
+      <h3>How to read the result</h3>
+      <ul>
+        <li><b>Match score</b> = loci carrying the Group 1 allele &divide; loci where a call could be made.</li>
+        <li>No conclusion is reported when fewer loci than &ldquo;minimum coverage&rdquo; can be read, since the
+            evidence is then insufficient.</li>
+        <li>Score &ge; upper threshold &rarr; Group 1; &le; lower threshold &rarr; not Group 1; in between &rarr;
+            inconclusive (worth a closer look for recombination or a chimeric assembly).</li>
+      </ul>
+
+      <h3>Known limits</h3>
+      <ul>
+        <li>The input must be an <strong>assembled genome</strong> (a draft split into contigs is fine);
+            raw reads are not supported.</li>
+        <li>A locus whose flank runs off the end of a contig, or carries another variant within 16 bp,
+            cannot be scored and is counted as undetermined; the other loci are unaffected.</li>
+        <li>This page is an <b>approximation</b> of the alignment workflow. Results intended for
+            publication should still be produced with bwa / snippy + snp-sites as described in the paper.</li>
+      </ul>
+
+      <h3>Data provenance</h3>
+      <p id="methodMeta"></p>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p id="footMeta"></p>
+</footer>
+
+<script src="assets/markers.js"></script>
+<script src="assets/core.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
